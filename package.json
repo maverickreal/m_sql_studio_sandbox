@@ -1,6 +1,6 @@
 {
   "name": "cipher-sql-studio-sandbox-executor",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Sandbox SQL executor worker for CipherSqlStudio",
   "main": "dist/worker.js",
   "scripts": {
