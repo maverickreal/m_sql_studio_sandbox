@@ -6,6 +6,7 @@ import {
 import DbPoolClient from "../../db";
 import { Job } from "bullmq";
 import { PoolClient } from "pg";
+import { logger } from "../../config";
 import {
   USER_SQL_EXEC_MAX_MEM,
   USER_SQL_EXEC_MAX_TIME,
@@ -66,7 +67,14 @@ class UserSqlCodeExecutor {
         error: SQLSanitiser(err instanceof Error ? err.message : `${err}`),
       };
     } finally {
-      await client.query("ROLLBACK");
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackErr) {
+        logger.error(
+          { err: rollbackErr },
+          "Failed to rollback read-only transaction!",
+        );
+      }
     }
   }
 
@@ -168,7 +176,14 @@ class UserSqlCodeExecutor {
         error: SQLSanitiser(err instanceof Error ? err.message : `${err}`),
       };
     } finally {
-      await client.query("ROLLBACK");
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackErr) {
+        logger.error(
+          { err: rollbackErr },
+          "Failed to rollback read-write transaction!",
+        );
+      }
     }
   }
 

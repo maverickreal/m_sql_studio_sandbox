@@ -63,7 +63,7 @@ describe("DbPoolClient", () => {
 
   it("should throw from get when not connected", () => {
     expect(() => DbPoolClient.get()).toThrow(
-      "PostreSQL client instance from null pool seeked!",
+      "PostgreSQL client instance from null pool sought!",
     );
   });
 
@@ -87,7 +87,7 @@ describe("DbPoolClient", () => {
 
   it("should throw from getAdmin when not connected", () => {
     expect(() => DbPoolClient.getAdmin()).toThrow(
-      "Admin PostreSQL client instance from null pool seeked!",
+      "Admin PostgreSQL client instance from null pool sought!",
     );
   });
 });

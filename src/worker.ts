@@ -8,7 +8,6 @@ import {
 } from "./types";
 import { Job, Worker } from "bullmq";
 import {
-  KILL_SIGNALS_TO_INTERCEPT,
   UNWANTED_SERVICE_TERMINATION_CODE,
   CONCURRENT_WORKERS_COUNT,
   ADMIN_ASSIGNMENT_SEED_JOB_NAME,
@@ -56,10 +55,11 @@ BullMQWorker.on("completed", async (job: SqlExecJob) => {
     return;
   }
   const assignmentId = job.data.assignmentId;
+  const encodedAssignmentId = encodeURIComponent(assignmentId);
 
   try {
     const schemaSetFlagResp = await fetch(
-      `${envVars.API_GATEWAY_URL}/internal/confirm/${assignmentId}`,
+      `${envVars.API_GATEWAY_URL}/internal/confirm/${encodedAssignmentId}`,
       {
         method: "PATCH",
         headers: {
@@ -110,6 +110,7 @@ BullMQWorker.on("failed", async (job: SqlExecJob | undefined, err: Error) => {
     return;
   }
   const assignmentId = job.data.assignmentId;
+  const encodedAssignmentId = encodeURIComponent(assignmentId);
 
   logger.error(
     {
@@ -125,7 +126,7 @@ BullMQWorker.on("failed", async (job: SqlExecJob | undefined, err: Error) => {
 
   try {
     const response = await fetch(
-      `${envVars.API_GATEWAY_URL}/internal/cleanup/${assignmentId}`,
+      `${envVars.API_GATEWAY_URL}/internal/cleanup/${encodedAssignmentId}`,
       {
         method: "POST",
         headers: {
@@ -155,18 +156,36 @@ BullMQWorker.on("ready", () => {
   logger.info({ queue: envVars.BULLMQ_SQL_QUEUE_NAME }, "BullMQ worker ready.");
 });
 
+const cleanup = async () => {
+  await BullMQWorker.close();
+  await DbPoolClient.disconnect();
+};
+
 if (process.env.NODE_ENV !== "test") {
-  KILL_SIGNALS_TO_INTERCEPT.forEach((event: string) =>
-    process.on(event, async () => {
+  ["SIGTERM", "SIGINT"].forEach((signal: string) =>
+    process.on(signal, async () => {
       logger.info(
-        { queue: envVars.BULLMQ_SQL_QUEUE_NAME },
-        "Worker terminated",
+        { signal, queue: envVars.BULLMQ_SQL_QUEUE_NAME },
+        "Worker terminated due to kill signal",
       );
 
-      await BullMQWorker.close();
-      await DbPoolClient.disconnect();
-
-      process.exit(UNWANTED_SERVICE_TERMINATION_CODE);
+      await cleanup();
+      process.exit(0);
     }),
   );
+
+  process.on("unhandledRejection", async (reason) => {
+    logger.error(
+      { reason },
+      "Unhandled promise rejection in worker — shutting down!",
+    );
+    await cleanup();
+    process.exit(UNWANTED_SERVICE_TERMINATION_CODE);
+  });
+
+  process.on("uncaughtException", async (err: Error) => {
+    logger.error({ err }, "Uncaught exception in worker — shutting down!");
+    await cleanup();
+    process.exit(UNWANTED_SERVICE_TERMINATION_CODE);
+  });
 }

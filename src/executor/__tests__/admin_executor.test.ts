@@ -92,9 +92,9 @@ describe("AdminSqlCodeExecutor", () => {
       },
     };
 
-    await expect(
-      AdminSqlCodeExecutor.process(mockJob),
-    ).rejects.toThrow("permission denied for schema");
+    await expect(AdminSqlCodeExecutor.process(mockJob)).rejects.toThrow(
+      "permission denied for schema",
+    );
     expect(mockQuery).toHaveBeenCalledWith("ROLLBACK;");
     expect(mockRelease).toHaveBeenCalled();
   });
@@ -112,9 +112,9 @@ describe("AdminSqlCodeExecutor", () => {
       },
     };
 
-    await expect(
-      AdminSqlCodeExecutor.process(mockJob),
-    ).rejects.toThrow("rollback failed");
+    await expect(AdminSqlCodeExecutor.process(mockJob)).rejects.toThrow(
+      "init failed",
+    );
     expect(mockRelease).toHaveBeenCalled();
   });
 });

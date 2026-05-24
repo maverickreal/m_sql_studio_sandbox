@@ -5,7 +5,7 @@ import {
 import DbPoolClient from "../../db";
 import { Job } from "bullmq";
 import { getSandboxDBSchemaIdForAssignment } from "../../utils";
-import { envVars } from "../../config";
+import { envVars, logger } from "../../config";
 
 class AdminSqlCodeExecutor {
   static async process(
@@ -29,7 +29,9 @@ class AdminSqlCodeExecutor {
         await dbPoolClientInst.query(initSql);
       }
 
-      const escapedRoleName = dbPoolClientInst.escapeIdentifier(envVars.PG_USER,);
+      const escapedRoleName = dbPoolClientInst.escapeIdentifier(
+        envVars.PG_USER,
+      );
 
       await dbPoolClientInst.query(
         `GRANT USAGE ON SCHEMA ${escapedSchemaName} TO ${escapedRoleName};
@@ -44,7 +46,14 @@ class AdminSqlCodeExecutor {
         success: true,
       };
     } catch (err) {
-      await dbPoolClientInst.query("ROLLBACK;");
+      try {
+        await dbPoolClientInst.query("ROLLBACK;");
+      } catch (rollbackErr) {
+        logger.error(
+          { err: rollbackErr },
+          "Failed to rollback admin seeding transaction!",
+        );
+      }
 
       throw err;
     } finally {

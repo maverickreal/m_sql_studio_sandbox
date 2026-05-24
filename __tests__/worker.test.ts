@@ -76,7 +76,6 @@ vi.mock("../src/config/log", () => ({
 }));
 
 vi.mock("../src/utils", () => ({
-  KILL_SIGNALS_TO_INTERCEPT: ["SIGTERM", "SIGINT"],
   UNWANTED_SERVICE_TERMINATION_CODE: 1,
   CONCURRENT_WORKERS_COUNT: 3,
   ADMIN_ASSIGNMENT_SEED_JOB_NAME: "client_sql_studio_admin_assignment_seed",
@@ -93,7 +92,10 @@ describe("Worker", () => {
   let mockError: Error;
   let UserSqlCodeExecutor: { process: ReturnType<typeof vi.fn> };
   let AdminSqlCodeExecutor: { process: ReturnType<typeof vi.fn> };
-  let logger: { info: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+  let logger: {
+    info: ReturnType<typeof vi.fn>;
+    error: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
     vi.clearAllMocks();

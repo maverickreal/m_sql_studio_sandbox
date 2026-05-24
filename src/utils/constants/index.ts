@@ -1,10 +1,3 @@
-export const KILL_SIGNALS_TO_INTERCEPT = [
-  "SIGTERM",
-  "SIGINT",
-  "UNHANDLED_REJECTION",
-  "UNCAUGHT_EXCEPTION",
-];
-
 export enum ENV_MODE {
   DEV = "DEV",
   STAGING = "STAGING",

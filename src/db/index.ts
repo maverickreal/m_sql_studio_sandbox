@@ -41,7 +41,7 @@ class DbPoolClient {
 
   static get(): Pool {
     if (!DbPoolClient.clientInst) {
-      throw new Error("PostreSQL client instance from null pool seeked!");
+      throw new Error("PostgreSQL client instance from null pool sought!");
     }
 
     return DbPoolClient.clientInst;
@@ -49,7 +49,9 @@ class DbPoolClient {
 
   static getAdmin(): Pool {
     if (!DbPoolClient.adminClientInst) {
-      throw new Error("Admin PostreSQL client instance from null pool seeked!");
+      throw new Error(
+        "Admin PostgreSQL client instance from null pool sought!",
+      );
     }
 
     return DbPoolClient.adminClientInst;
