@@ -1,4 +1,4 @@
-# CipherSqlStudio Sandbox Executor
+# MSqlStudio Sandbox Executor
 
 BullMQ worker service that executes user-submitted SQL queries in isolated PostgreSQL sandboxes. Part of the online SQL learning platform.
 
@@ -8,9 +8,9 @@ To test/run the entire backend locally, all you need do is:
 
 1. Clone all the project repos:
    - https://github.com/maverickreal/m_sql
-   - https://github.com/maverickreal/cipher_sql_studio_sandbox
-   - https://github.com/maverickreal/cipher_sql_studio_api_gateway
-2. Run the following shell code, from within the orchestrator repo (cipher_sql_studio):
+   - https://github.com/maverickreal/m_sql_studio_sandbox
+   - https://github.com/maverickreal/m_sql_studio_api_gateway
+2. Run the following shell code, from within the orchestrator repo (m_sql_studio):
    ```sh
    chmod u+x ./init.dev.bash;
    ./init.dev.bash;
@@ -31,7 +31,7 @@ To test/run the entire backend locally, all you need do is:
 ## Prerequisites
 
 - Node.js 22+
-- Running PostgreSQL and Redis instances (or use the parent [cipher_sql_studio](../cipher_sql_studio) Docker Compose setup)
+- Running PostgreSQL and Redis instances (or use the parent [m_sql_studio](../m_sql_studio) Docker Compose setup)
 
 ## Getting Started
 
@@ -67,8 +67,8 @@ npm run start
 ### Docker
 
 ```bash
-docker build -t cipher-sql-studio-sandbox .
-docker run --env-file .env cipher-sql-studio-sandbox
+docker build -t m-sql-studio-sandbox .
+docker run --env-file .env m-sql-studio-sandbox
 ```
 
 The production image uses a multi-stage build. When run via Docker Compose, the container is constrained to 512MB memory and 1 CPU core.
@@ -80,14 +80,14 @@ The production image uses a multi-stage build. When run via Docker Compose, the 
 | `REDIS_URL`             | Redis connection URL (BullMQ)                         | `redis://:password@localhost:6379` |
 | `PG_HOST`               | PostgreSQL host                                       | `localhost`                        |
 | `PG_PORT`               | PostgreSQL port                                       | `5432`                             |
-| `PG_DATABASE`           | PostgreSQL database name                              | `cipher_sql_studio`                |
+| `PG_DATABASE`           | PostgreSQL database name                              | `m_sql_studio`                |
 | `PG_USER`               | Restricted PostgreSQL user (for user query execution) | `sandbox_user`                     |
 | `PG_PASSWORD`           | Password for the restricted user                      | --                                 |
 | `ADMIN_PG_USER`         | PostgreSQL admin user (for schema creation)           | `postgres`                         |
 | `ADMIN_PG_PASSWORD`     | Password for the admin user                           | --                                 |
 | `ENV_MODE`              | Environment mode                                      | `DEV`, `STAGING`, `PROD`           |
 | `LOG_LEVEL`             | Pino log level                                        | `info`                             |
-| `LOG_DIR`               | Directory for log file output                         | `/var/log/cipher_sql_studio`       |
+| `LOG_DIR`               | Directory for log file output                         | `/var/log/m_sql_studio`       |
 | `BULLMQ_SQL_QUEUE_NAME` | BullMQ queue name (must match API Gateway)            | `sql_exec_queue`                   |
 | `INTERNAL_API_KEY`      | Shared key for service-to-service auth                | --                                 |
 | `API_GATEWAY_URL`       | API Gateway base URL for callbacks                    | `http://api-gateway:8000`          |
