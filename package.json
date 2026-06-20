@@ -1,7 +1,7 @@
 {
-  "name": "cipher-sql-studio-sandbox-executor",
+  "name": "m-sql-studio-sandbox-executor",
   "version": "0.0.1",
-  "description": "Sandbox SQL executor worker for CipherSqlStudio",
+  "description": "Sandbox SQL executor worker for MSqlStudio",
   "main": "dist/worker.js",
   "scripts": {
     "dev": "nodemon",
