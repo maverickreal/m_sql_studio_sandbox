@@ -5,6 +5,20 @@ const { mockWorkerOn } = vi.hoisted(() => {
   return { mockWorkerOn };
 });
 
+const { mockRedisPublish, mockRedisConnect } = vi.hoisted(() => ({
+  mockRedisPublish: vi.fn().mockResolvedValue(1),
+  mockRedisConnect: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("redis", () => ({
+  createClient: vi.fn(() => ({
+    on: vi.fn(),
+    connect: mockRedisConnect,
+    publish: mockRedisPublish,
+    quit: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+
 vi.mock("bullmq", () => {
   const mockWorkerClose = vi.fn().mockResolvedValue(undefined);
   return {
@@ -78,7 +92,10 @@ vi.mock("../src/config/log", () => ({
 vi.mock("../src/utils", () => ({
   UNWANTED_SERVICE_TERMINATION_CODE: 1,
   CONCURRENT_WORKERS_COUNT: 3,
+  BULLMQ_JOB_NAME: "client_sql_studio_sql_exec",
   ADMIN_ASSIGNMENT_SEED_JOB_NAME: "client_sql_studio_admin_assignment_seed",
+  CLEANUP_JOB_NAME: "client_sql_studio_cleanup",
+  SANDBOX_DB_SCHEMA_PREFIX: "assignment_schema_",
 }));
 
 describe("Worker", () => {
@@ -346,6 +363,38 @@ describe("Worker", () => {
         { jobId: "job-123", jobName: "client_sql_studio_sql_exec" },
         "Successfully finished job",
       );
+    });
+
+    it("publishes terminal state to job:{jobId} for user SQL jobs", async () => {
+      const completedEventHandler = mockWorkerOn.mock.calls.find(
+        (call: unknown[]) => call[0] === "completed",
+      )?.[1] as (job: typeof mockJob) => Promise<void> | undefined;
+
+      expect(completedEventHandler).toBeDefined();
+
+      await completedEventHandler!({
+        ...mockJob,
+        returnvalue: { success: true },
+      } as never);
+
+      expect(mockRedisPublish).toHaveBeenCalledWith(
+        "job:job-123",
+        JSON.stringify({ status: "completed", result: { success: true } }),
+      );
+    });
+
+    it("does not publish terminal state for admin seed jobs", async () => {
+      mockRedisPublish.mockClear();
+      const completedEventHandler = mockWorkerOn.mock.calls.find(
+        (call: unknown[]) => call[0] === "completed",
+      )?.[1] as (job: typeof mockJob) => Promise<void> | undefined;
+
+      await completedEventHandler!({
+        ...mockJob,
+        name: "client_sql_studio_admin_assignment_seed",
+      } as never);
+
+      expect(mockRedisPublish).not.toHaveBeenCalled();
     });
   });
 

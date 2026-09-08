@@ -1,5 +1,9 @@
 import DbPoolClient from "./db";
-import { UserSqlCodeExecutor, AdminSqlCodeExecutor } from "./executor/";
+import {
+  UserSqlCodeExecutor,
+  AdminSqlCodeExecutor,
+  CleanupExecutor,
+} from "./executor/";
 import {
   UserSqlExecJobData,
   UserSqlExecJobResult,
@@ -7,10 +11,13 @@ import {
   AdminAssignmentSeedJobResult,
 } from "./types";
 import { Job, Worker } from "bullmq";
+import { createClient, RedisClientType } from "redis";
 import {
   UNWANTED_SERVICE_TERMINATION_CODE,
   CONCURRENT_WORKERS_COUNT,
   ADMIN_ASSIGNMENT_SEED_JOB_NAME,
+  BULLMQ_JOB_NAME,
+  CLEANUP_JOB_NAME,
 } from "./utils";
 import { envVars } from "./config";
 import { logger } from "./config";
@@ -40,16 +47,57 @@ const BullMQWorker = new Worker<
   (job: Job) =>
     (job.name === ADMIN_ASSIGNMENT_SEED_JOB_NAME
       ? AdminSqlCodeExecutor
-      : UserSqlCodeExecutor
+      : job.name === CLEANUP_JOB_NAME
+        ? CleanupExecutor
+        : UserSqlCodeExecutor
     ).process(job),
   workerOpts,
 );
+
+let redisPubClient: RedisClientType | null = null;
+
+const getRedisPubClient = async (): Promise<RedisClientType> => {
+  if (!redisPubClient) {
+    redisPubClient = createClient({ url: envVars.REDIS_URL });
+    redisPubClient.on("error", (err: Error) => {
+      logger.error({ err }, "Error in worker Redis pub connection!");
+    });
+    await redisPubClient.connect();
+  }
+
+  return redisPubClient;
+};
+
+const publishJobTerminalState = async (
+  job: SqlExecJob,
+  status: "completed" | "failed",
+  result: unknown,
+): Promise<void> => {
+  if (job.name !== BULLMQ_JOB_NAME) {
+    return;
+  }
+
+  try {
+    const client = await getRedisPubClient();
+    await client.publish(
+      `job:${job.id}`,
+      JSON.stringify({ status, result }),
+    );
+  } catch (err) {
+    logger.error(
+      { err, jobId: job.id },
+      "Failed to publish job terminal state!",
+    );
+  }
+};
 
 BullMQWorker.on("completed", async (job: SqlExecJob) => {
   logger.info(
     { jobId: job.id, jobName: job.name },
     "Successfully finished job",
   );
+
+  await publishJobTerminalState(job, "completed", job.returnvalue);
 
   if (job.name !== ADMIN_ASSIGNMENT_SEED_JOB_NAME) {
     return;
@@ -107,6 +155,11 @@ BullMQWorker.on("failed", async (job: SqlExecJob | undefined, err: Error) => {
       "An SQL execution job attempt failed!",
     );
 
+    await publishJobTerminalState(job, "failed", {
+      success: false,
+      error: err.message,
+    });
+
     return;
   }
   const assignmentId = job.data.assignmentId;
@@ -158,6 +211,10 @@ BullMQWorker.on("ready", () => {
 
 const cleanup = async () => {
   await BullMQWorker.close();
+  if (redisPubClient) {
+    await redisPubClient.quit();
+    redisPubClient = null;
+  }
   await DbPoolClient.disconnect();
 };
 
