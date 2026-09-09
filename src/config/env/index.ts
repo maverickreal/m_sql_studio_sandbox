@@ -19,6 +19,7 @@ const envVarsSchema = z.object({
   API_GATEWAY_URL: z.url().nonempty().nonoptional(),
   INTERNAL_API_KEY: z.string().nonempty().nonoptional(),
   SANDBOX_SCHEMA_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  SANDBOX_CLEANUP_CONCURRENCY: z.coerce.number().int().default(3),
 });
 
 const parsedEnvVarsBody = envVarsSchema.safeParse(process.env);

@@ -120,4 +120,111 @@ describe("CleanupExecutor", () => {
     );
     expect(mockQuery).not.toHaveBeenCalled();
   });
+
+  it("caps concurrent drops at 3 on 8 names", async () => {
+    const names = Array.from(
+      { length: 8 },
+      (_, i) => `assignment_schema_conc${i}abc`,
+    );
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaNames: names, count: 8 }),
+    });
+    let inFlight = 0;
+    let maxInFlight = 0;
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (`${sql}`.includes("DROP SCHEMA")) {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 20));
+        inFlight -= 1;
+        return { rows: [] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await CleanupExecutor.process({
+      name: "client_sql_studio_cleanup",
+    } as never);
+
+    expect(result).toEqual(
+      expect.objectContaining({ success: true, droppedCount: 8 }),
+    );
+    expect(maxInFlight).toBeLessThanOrEqual(3);
+    // proves batching: sequential code stays at 1
+    expect(maxInFlight).toBeGreaterThan(1);
+  });
+
+  it("partial failure still drops others", async () => {
+    const names = [
+      "assignment_schema_partA1",
+      "assignment_schema_partB2",
+      "assignment_schema_partC3",
+    ];
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaNames: names, count: 3 }),
+    });
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (`${sql}`.includes("DROP SCHEMA")) {
+        if (`${sql}`.includes("assignment_schema_partB2")) {
+          throw new Error("drop boom");
+        }
+        return { rows: [] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await CleanupExecutor.process({
+      name: "client_sql_studio_cleanup",
+    } as never);
+
+    expect(result).toEqual(
+      expect.objectContaining({ success: true, droppedCount: 2 }),
+    );
+    expect(result.dropped).toEqual(
+      expect.arrayContaining([
+        "assignment_schema_partA1",
+        "assignment_schema_partC3",
+      ]),
+    );
+    expect(result.dropped).not.toContain("assignment_schema_partB2");
+  });
+
+  it("mixed invalid name not interpolated and cap holds", async () => {
+    const names = [
+      "public; DROP TABLE users;--",
+      "assignment_schema_mix1",
+      "assignment_schema_mix2",
+      "assignment_schema_mix3",
+      "assignment_schema_mix4",
+    ];
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ schemaNames: names, count: 5 }),
+    });
+    let inFlight = 0;
+    let maxInFlight = 0;
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (`${sql}`.includes("DROP SCHEMA")) {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 20));
+        inFlight -= 1;
+        return { rows: [] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await CleanupExecutor.process({
+      name: "client_sql_studio_cleanup",
+    } as never);
+
+    const allSql = mockQuery.mock.calls.map((c) => `${c[0]}`).join("\n");
+    expect(allSql).not.toContain("DROP TABLE users");
+    expect(result).toEqual(
+      expect.objectContaining({ success: true, droppedCount: 4 }),
+    );
+    expect(maxInFlight).toBeLessThanOrEqual(3);
+  });
 });

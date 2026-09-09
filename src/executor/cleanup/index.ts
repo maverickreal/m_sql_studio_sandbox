@@ -1,5 +1,6 @@
 import DbPoolClient from "../../db";
 import { envVars, logger } from "../../config";
+import { PG_POOL_MAX } from "../../utils";
 
 interface CleanupResult {
   success: boolean;
@@ -49,12 +50,27 @@ class CleanupExecutor {
     const dropped: string[] = [];
     const pool = DbPoolClient.getAdmin();
 
+    // Batched drops: at most `concurrency` in flight so the shared admin
+    // pool (PG_POOL_MAX) keeps slots for concurrent SQL/admin work.
+    const rawConcurrency =
+      (envVars as { SANDBOX_CLEANUP_CONCURRENCY?: number })
+        .SANDBOX_CLEANUP_CONCURRENCY ?? 3;
+    const concurrency = Math.min(
+      Math.max(Math.floor(rawConcurrency) || 3, 1),
+      PG_POOL_MAX - 1,
+    );
+
+    const validNames: string[] = [];
     for (const schemaName of schemaNames) {
       if (!SCHEMA_NAME_RE.test(schemaName)) {
         logger.error({ schemaName }, "Refusing to drop unexpected schema!");
         continue;
       }
+      validNames.push(schemaName);
+    }
 
+    let next = 0;
+    const dropOne = async (schemaName: string): Promise<void> => {
       try {
         // validated against SCHEMA_NAME_RE above — safe to interpolate.
         await pool.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
@@ -63,7 +79,22 @@ class CleanupExecutor {
       } catch (err) {
         logger.error({ err, schemaName }, "Failed to drop stale schema!");
       }
-    }
+    };
+    const worker = async (): Promise<void> => {
+      while (true) {
+        const i = next;
+        next += 1;
+        if (i >= validNames.length) return;
+        const name = validNames[i] as string;
+        await dropOne(name);
+      }
+    };
+    await Promise.all(
+      Array.from(
+        { length: Math.min(concurrency, validNames.length) },
+        () => worker(),
+      ),
+    );
 
     try {
       const counts = await pool.query(
