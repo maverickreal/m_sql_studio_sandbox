@@ -1,18 +1,19 @@
-FROM node:22-alpine AS build
+# syntax=docker/dockerfile:1.4
+FROM oven/bun:1.2-alpine AS build
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile
 
 COPY . .
-RUN npm run build
+RUN bun run build
 
-FROM node:22-alpine
+FROM oven/bun:1.2-alpine
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json bun.lock* ./
 ARG ENV_MODE=PROD
-RUN if [ "$ENV_MODE" = "DEV" ]; then npm ci; else npm ci --omit=dev; fi
+RUN if [ "$ENV_MODE" = "DEV" ]; then bun install --frozen-lockfile; else bun install --frozen-lockfile --production; fi
 
 COPY --from=build /app/dist ./dist
-CMD ["npm", "run", "start"]
+CMD ["bun", "run", "start"]

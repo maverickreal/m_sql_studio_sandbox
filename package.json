@@ -4,9 +4,9 @@
   "description": "Sandbox SQL executor worker for MSqlStudio",
   "main": "dist/worker.js",
   "scripts": {
-    "dev": "nodemon",
+    "dev": "bun --watch src/worker.ts",
     "build": "tsc",
-    "start": "node dist/worker.js",
+    "start": "bun dist/worker.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
