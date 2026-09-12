@@ -18,6 +18,7 @@ import {
   ADMIN_ASSIGNMENT_SEED_JOB_NAME,
   BULLMQ_JOB_NAME,
   CLEANUP_JOB_NAME,
+  encodeRedisPassword,
 } from "./utils";
 import { envVars } from "./config";
 import { logger } from "./config";
@@ -29,9 +30,11 @@ type SqlExecJob = Job<
 >;
 DbPoolClient.connect();
 
+const encodedRedisUrl = encodeRedisPassword(envVars.REDIS_URL);
+
 const workerOpts = {
   connection: {
-    url: envVars.REDIS_URL,
+    url: encodedRedisUrl,
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     lazyConnect: false,
@@ -58,7 +61,7 @@ let redisPubClient: RedisClientType | null = null;
 
 const getRedisPubClient = async (): Promise<RedisClientType> => {
   if (!redisPubClient) {
-    redisPubClient = createClient({ url: envVars.REDIS_URL });
+    redisPubClient = createClient({ url: encodedRedisUrl });
     redisPubClient.on("error", (err: Error) => {
       logger.error({ err }, "Error in worker Redis pub connection!");
     });

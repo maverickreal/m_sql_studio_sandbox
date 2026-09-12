@@ -2,7 +2,7 @@ import { z } from "zod/v4";
 import { ENV_MODE, UNWANTED_SERVICE_TERMINATION_CODE } from "../../utils";
 
 const envVarsSchema = z.object({
-  REDIS_URL: z.url().nonempty().nonoptional(),
+  REDIS_URL: z.string().startsWith("redis").nonempty().nonoptional(),
   PG_HOST: z.string().nonempty().nonoptional(),
   PG_PORT: z.coerce.number().int().nonoptional(),
   PG_DATABASE: z.string().nonempty().nonoptional(),
