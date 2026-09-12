@@ -6,7 +6,7 @@ BullMQ worker service that executes user-submitted SQL queries in isolated Postg
 
 | Technology | Purpose |
 |------------|---------|
-| Node.js 22 | Runtime |
+| Bun | Runtime |
 | TypeScript | Language |
 | BullMQ 5 | Job queue consumer |
 | PostgreSQL (pg 8) | SQL execution engine |
@@ -16,7 +16,7 @@ BullMQ worker service that executes user-submitted SQL queries in isolated Postg
 
 ## Prerequisites
 
-- Node.js 22+
+- Bun
 - Running PostgreSQL and Redis instances (or use the parent [m_sql_studio](../m_sql_studio) Docker Compose setup)
 
 ## Getting Started
@@ -24,7 +24,7 @@ BullMQ worker service that executes user-submitted SQL queries in isolated Postg
 ### 1. Install Dependencies
 
 ```bash
-npm ci
+bun install
 ```
 
 ### 2. Configure Environment Variables
@@ -38,16 +38,16 @@ Fill in all values. See [Environment Variables](#environment-variables).
 ### 3. Run in Development
 
 ```bash
-npm run dev
+bun run dev
 ```
 
-Starts the worker with `nodemon` for automatic restarts on file changes.
+Starts the worker with `bun --watch` for automatic restarts on file changes.
 
 ### 4. Build and Run for Production
 
 ```bash
-npm run build
-npm run start
+bun run build
+bun run start
 ```
 
 ### Docker
@@ -82,11 +82,11 @@ The production image uses a multi-stage build. When run via Docker Compose, the 
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start worker with nodemon |
-| `npm run build` | Compile TypeScript to `dist/` |
-| `npm run start` | Run compiled output (`dist/worker.js`) |
-| `npm run test` | Run tests with Vitest |
-| `npm run test:watch` | Run tests in watch mode |
+| `bun run dev` | Start worker with `bun --watch` |
+| `bun run build` | Compile TypeScript to `dist/` |
+| `bun run start` | Run compiled output (`dist/worker.js`) |
+| `bun run test` | Run tests with Vitest |
+| `bun run test:watch` | Run tests in watch mode |
 
 ## Project Structure
 
