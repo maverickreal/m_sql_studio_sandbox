@@ -94,6 +94,106 @@ const publishJobTerminalState = async (
   }
 };
 
+export const CONFIRM_MAX_RETRIES = 5;
+export const CONFIRM_BASE_DELAY_MS = 200;
+
+export interface ConfirmRetryOptions {
+  maxRetries?: number;
+  baseDelayMs?: number;
+  sleepFn?: (ms: number) => Promise<void>;
+}
+
+export const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+export const confirmAssignmentSchemaReady = async (
+  assignmentId: string,
+  options?: ConfirmRetryOptions,
+): Promise<boolean> => {
+  const maxRetries = options?.maxRetries ?? CONFIRM_MAX_RETRIES;
+  const baseDelayMs = options?.baseDelayMs ?? CONFIRM_BASE_DELAY_MS;
+  const sleepFn = options?.sleepFn ?? defaultSleep;
+
+  const encodedAssignmentId = encodeURIComponent(assignmentId);
+  const url = `${envVars.API_GATEWAY_URL}/internal/confirm/${encodedAssignmentId}`;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const schemaSetFlagResp = await fetch(url, {
+        method: "PATCH",
+        headers: {
+          "x-internal-api-key": envVars.INTERNAL_API_KEY,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (schemaSetFlagResp.ok) {
+        logger.info(
+          {
+            assignmentId,
+            status: undefined,
+            attempt: attempt > 0 ? attempt + 1 : undefined,
+          },
+          "Success at confirming assignment schema ready!",
+        );
+        return true;
+      }
+
+      if (schemaSetFlagResp.status === 429) {
+        if (attempt < maxRetries) {
+          const backoff = baseDelayMs * Math.pow(2, attempt);
+          const jitter = Math.floor(Math.random() * backoff);
+          const delay = backoff + jitter;
+
+          logger.warn(
+            {
+              assignmentId,
+              attempt: attempt + 1,
+              maxRetries,
+              retryDelayMs: delay,
+            },
+            `Rate limit (429) received when confirming schema ready. Retrying in ${delay}ms...`,
+          );
+
+          await sleepFn(delay);
+          continue;
+        } else {
+          logger.error(
+            {
+              assignmentId,
+              status: 429,
+              attempts: attempt + 1,
+              maxRetries,
+            },
+            `Failure at confirming assignment schema ready! Exhausted all ${maxRetries} retries due to 429 rate limit.`,
+          );
+          console.error(
+            `\n🚨 [FATAL RATE LIMIT] GIVE-UP: Failed to confirm assignment schema ready for '${assignmentId}' after ${maxRetries} retries (HTTP 429). pgSchemaReady remains false!\n`,
+          );
+          return false;
+        }
+      }
+
+      logger.info(
+        {
+          assignmentId,
+          status: schemaSetFlagResp.status,
+        },
+        "Failure at confirming assignment schema ready!",
+      );
+      return false;
+    } catch (err) {
+      logger.error(
+        { assignmentId, err },
+        "Failure while requesting the API Gateway 'internal confirm' API endpoint!",
+      );
+      return false;
+    }
+  }
+
+  return false;
+};
+
 BullMQWorker.on("completed", async (job: SqlExecJob) => {
   logger.info(
     { jobId: job.id, jobName: job.name },
@@ -106,33 +206,7 @@ BullMQWorker.on("completed", async (job: SqlExecJob) => {
     return;
   }
   const assignmentId = job.data.assignmentId;
-  const encodedAssignmentId = encodeURIComponent(assignmentId);
-
-  try {
-    const schemaSetFlagResp = await fetch(
-      `${envVars.API_GATEWAY_URL}/internal/confirm/${encodedAssignmentId}`,
-      {
-        method: "PATCH",
-        headers: {
-          "x-internal-api-key": envVars.INTERNAL_API_KEY,
-          "Content-Type": "application/json",
-        },
-      },
-    );
-
-    logger.info(
-      {
-        assignmentId,
-        status: schemaSetFlagResp.ok ? undefined : schemaSetFlagResp.status,
-      },
-      `${schemaSetFlagResp.ok ? "Success" : "Failure"} at confirming assignment schema ready!`,
-    );
-  } catch (err) {
-    logger.error(
-      { assignmentId, err },
-      "Failure while requesting the API Gateway 'internal confirm' API endpoint!",
-    );
-  }
+  await confirmAssignmentSchemaReady(assignmentId);
 });
 
 BullMQWorker.on("failed", async (job: SqlExecJob | undefined, err: Error) => {

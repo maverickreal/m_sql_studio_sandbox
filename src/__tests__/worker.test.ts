@@ -182,4 +182,99 @@ describe("Worker module", () => {
       }),
     );
   });
+
+  describe("429 retry with backoff+jitter and give-up terminal log", () => {
+    it("retries on 429 and succeeds when gateway recovers within max retries", async () => {
+      const mockSleep = vi.fn().mockResolvedValue(undefined);
+      const { confirmAssignmentSchemaReady } = await import("../worker");
+
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 429 } as any)
+        .mockResolvedValueOnce({ ok: false, status: 429 } as any)
+        .mockResolvedValueOnce({ ok: true, status: 200 } as any);
+
+      const result = await confirmAssignmentSchemaReady("seed-retry-success", {
+        maxRetries: 5,
+        baseDelayMs: 10,
+        sleepFn: mockSleep,
+      });
+
+      expect(result).toBe(true);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+      expect(mockSleep).toHaveBeenCalledTimes(2);
+      // Verify backoff + jitter delay is positive
+      expect(mockSleep.mock.calls[0][0]).toBeGreaterThanOrEqual(10);
+      expect(mockSleep.mock.calls[1][0]).toBeGreaterThanOrEqual(20);
+    });
+
+    it("gives up after max 5 retries on 429 and logs loudly to terminal", async () => {
+      const mockSleep = vi.fn().mockResolvedValue(undefined);
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+      const { confirmAssignmentSchemaReady, CONFIRM_MAX_RETRIES } = await import(
+        "../worker"
+      );
+
+      expect(CONFIRM_MAX_RETRIES).toBe(5);
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+      } as any);
+
+      const result = await confirmAssignmentSchemaReady("seed-retry-fail", {
+        maxRetries: 5,
+        baseDelayMs: 10,
+        sleepFn: mockSleep,
+      });
+
+      expect(result).toBe(false);
+      // 1 initial attempt + 5 retries = 6 total fetch calls
+      expect(globalThis.fetch).toHaveBeenCalledTimes(6);
+      expect(mockSleep).toHaveBeenCalledTimes(5);
+
+      // Verify loud terminal log on give-up
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("GIVE-UP"),
+      );
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining("seed-retry-fail"),
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("does not retry on non-429 client/server errors", async () => {
+      const mockSleep = vi.fn().mockResolvedValue(undefined);
+      const { confirmAssignmentSchemaReady } = await import("../worker");
+
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+      } as any);
+
+      const result = await confirmAssignmentSchemaReady("seed-500", {
+        maxRetries: 5,
+        baseDelayMs: 10,
+        sleepFn: mockSleep,
+      });
+
+      expect(result).toBe(false);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(mockSleep).not.toHaveBeenCalled();
+    });
+
+    it("handles network error gracefully without unhandled rejection", async () => {
+      const { confirmAssignmentSchemaReady } = await import("../worker");
+
+      globalThis.fetch = vi
+        .fn()
+        .mockRejectedValue(new Error("Network connection dropped"));
+
+      const result = await confirmAssignmentSchemaReady("seed-net-err");
+      expect(result).toBe(false);
+    });
+  });
 });
