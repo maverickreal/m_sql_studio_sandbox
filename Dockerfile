@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM oven/bun:1.2-alpine AS build
+FROM oven/bun:1.4-alpine AS build
 WORKDIR /app
 
 COPY package.json bun.lock* ./
@@ -8,7 +8,7 @@ RUN bun install --frozen-lockfile
 COPY . .
 RUN bun run build
 
-FROM oven/bun:1.2-alpine
+FROM oven/bun:1.4-alpine
 WORKDIR /app
 
 COPY package.json bun.lock* ./
